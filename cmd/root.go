@@ -39,7 +39,7 @@ import (
 var cfgFile string
 
 var rootCmd = &cobra.Command{
-	Version: "0.0.1",
+	Version: "0.0.2",
 	Use:     "fastcgid",
 	Short:   "A brief description of your application",
 	Long: `A longer description that spans multiple lines and likely contains

@@ -31,30 +31,25 @@ POSSIBILITY OF SUCH DAMAGE.
 package cmd
 
 import (
-	"os"
-
-	"github.com/rstms/cobra-daemon"
+	"github.com/rstms/fastcgid/server"
 	"github.com/spf13/cobra"
 )
 
-var cfgFile string
-
-var rootCmd = &cobra.Command{
-	Version: "0.0.2",
-	Use:     "fastcgid",
-	Short:   "FastCGI TCP server",
-	Long:    `Listening TCP FastCGI Server`,
+var runCmd = &cobra.Command{
+	Use:   "run",
+	Short: "run fastcgi server",
+	Long: `
+Listen on a TCP port for FastCGI connections from a web server process, 
+executing the requested script and writing stdout back to the server
+`,
+	Run: func(cmd *cobra.Command, args []string) {
+		server, err := server.NewServer()
+		cobra.CheckErr(err)
+		err = server.Run()
+		cobra.CheckErr(err)
+	},
 }
 
-func Execute() {
-	err := rootCmd.Execute()
-	if err != nil {
-		os.Exit(1)
-	}
-}
 func init() {
-	CobraInit(rootCmd)
-	daemon.AddDaemonCommands(rootCmd, "run")
-	OptionString(rootCmd, "addr", "a", "127.0.0.1", "listen address")
-	OptionString(rootCmd, "port", "p", "9000", "listen port")
+	rootCmd.AddCommand(runCmd)
 }

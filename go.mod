@@ -3,6 +3,7 @@ module github.com/rstms/fastcgid
 go 1.25.4
 
 require (
+	github.com/rstms/cobra-daemon v0.1.0
 	github.com/rstms/go-common v0.2.71
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/viper v1.21.0

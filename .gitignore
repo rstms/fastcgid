@@ -1,0 +1,7 @@
+fastcgid
+fastcgid.exe
+notes
+cruft
+*.core
+*.log
+*postactivate

@@ -68,6 +68,15 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if !s.writeString(w, "<h1>FastCGI Response</h1>\n") {
 		return
 	}
+
+	if !s.writeString(w, fmt.Sprintf("<h2>URL</h2><code>%s</code>\n", r.URL)) {
+		return
+	}
+
+	if !s.writeString(w, fmt.Sprintf("<h2>Query</h2><code>%v</code>\n", r.URL.Query())) {
+		return
+	}
+
 	if !s.writeString(w, "<h2>Headers:</h2>\n") {
 		return
 	}

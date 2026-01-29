@@ -135,33 +135,32 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if ebuf.Len() > 0 {
 		log.Printf("script %s stderr: %s\n", scriptPath, ebuf.String())
 	}
-	scanner := bufio.NewScanner(&obuf)
-	var headerComplete bool
-	for scanner.Scan() {
-		line := scanner.Text()
-		if s.verbose {
-			log.Printf("stdout: %s\n", line)
+	reader := bufio.NewReader(&obuf)
+	for {
+		line, _, err := reader.ReadLine()
+		if err != nil {
+			log.Printf("stdout ReadLine failed with: %v\n", err)
+			s.fail(w, http.StatusInternalServerError)
+			return
 		}
-		switch {
-		case headerComplete:
-			if !s.writeString(w, line+"\n") {
+		if s.verbose {
+			log.Printf("stdout: %v\n", line)
+		}
+		if len(line) == 0 {
+			_, err := reader.WriteTo(w)
+			if err != nil {
+				log.Printf("stdout WriteTo failed with: %v\n", err)
+				s.fail(w, http.StatusInternalServerError)
 				return
 			}
-		case line == "":
-			headerComplete = true
-		default:
-			fields := HEADER_PATTERN.FindStringSubmatch(line)
-			if len(fields) == 3 {
-				w.Header().Set(fields[1], fields[2])
-			} else {
-				log.Printf("failed parsing output header: %s\n", line)
-			}
+			return
 		}
-	}
-	err = scanner.Err()
-	if err != nil {
-		s.fail(w, http.StatusInternalServerError)
-		return
+		fields := HEADER_PATTERN.FindStringSubmatch(string(line))
+		if len(fields) == 3 {
+			w.Header().Set(fields[1], fields[2])
+		} else {
+			log.Printf("failed parsing output header: %s\n", line)
+		}
 	}
 }
 

@@ -20,7 +20,7 @@ import (
 	"time"
 )
 
-const Version = "1.0.1"
+const Version = "1.0.2"
 
 const SHUTDOWN_TIMEOUT = 5 * time.Second
 

@@ -110,6 +110,13 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	for key, value := range env {
 		cmd.Env = append(cmd.Env, fmt.Sprintf("%s=%s", key, value))
 	}
+
+	if s.verbose {
+		for key, value := range env {
+			log.Printf("env: %s=%s\n", key, value)
+		}
+	}
+
 	w.WriteHeader(http.StatusOK)
 	w.Header().Set("Content-Type", "text/html")
 

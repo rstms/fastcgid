@@ -144,7 +144,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if s.verbose {
-			log.Printf("stdout: %v\n", line)
+			log.Printf("stdout: %s\n", line)
 		}
 		if len(line) == 0 {
 			_, err := reader.WriteTo(w)

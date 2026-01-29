@@ -139,6 +139,9 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	var headerComplete bool
 	for scanner.Scan() {
 		line := scanner.Text()
+		if s.verbose {
+			log.Printf("stdout: %s\n", line)
+		}
 		switch {
 		case headerComplete:
 			if !s.writeString(w, line+"\n") {

@@ -85,6 +85,11 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		query = fields[2]
 	}
 
+	if s.verbose {
+		log.Printf("script: %s\n", script)
+		log.Printf("query: %s\n", query)
+	}
+
 	env := fcgi.ProcessEnv(r)
 	env["REQUEST_URI"] = r.URL.String()
 	env["SCRIPT_NAME"] = script
@@ -95,6 +100,10 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	env["REQUEST_METHOD"] = r.Method
 
 	scriptPath := filepath.Join(s.ScriptRoot, env["SCRIPT_FILENAME"])
+
+	if s.verbose {
+		log.Printf("scriptPath: %s\n", scriptPath)
+	}
 
 	cmd := exec.Command(scriptPath)
 	cmd.Env = os.Environ()

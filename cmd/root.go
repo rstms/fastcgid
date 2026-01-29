@@ -40,7 +40,7 @@ import (
 var cfgFile string
 
 var rootCmd = &cobra.Command{
-	Version: "1.0.2",
+	Version: "1.0.3",
 	Use:     "fastcgid",
 	Short:   "FastCGI TCP server",
 	Long:    `Listening TCP FastCGI Server`,

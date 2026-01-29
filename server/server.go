@@ -1,15 +1,20 @@
 package server
 
 import (
+	"bufio"
+	"bytes"
 	"fmt"
-	"html"
 	"io"
 	"log"
 	"net"
 	"net/http"
 	"net/http/fcgi"
 	"os"
+	"os/exec"
 	"os/signal"
+	"path/filepath"
+	"regexp"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -20,18 +25,20 @@ const Version = "0.0.1"
 const SHUTDOWN_TIMEOUT = 5 * time.Second
 
 type Server struct {
-	verbose  bool
-	shutdown chan struct{}
-	listener net.Listener
+	verbose    bool
+	shutdown   chan struct{}
+	listener   net.Listener
+	ScriptRoot string
 }
 
 func NewServer() (*Server, error) {
 
 	log.Printf("fastcgid v%s uid=%d gid=%d started as PID %d", Version, os.Getuid(), os.Getgid(), os.Getpid())
-
+	ViperSetDefault("root", "/var/www")
 	h := Server{
-		verbose:  ViperGetBool("verbose"),
-		shutdown: make(chan struct{}, 1),
+		verbose:    ViperGetBool("verbose"),
+		shutdown:   make(chan struct{}, 1),
+		ScriptRoot: ViperGetString("root"),
 	}
 
 	return &h, nil
@@ -59,54 +66,82 @@ func (s *Server) writeString(w http.ResponseWriter, line string) bool {
 	return true
 }
 
+var URL_PATTERN = regexp.MustCompile(`.*cgi-bin/([^?]*)[?](.*)$`)
+var HEADER_PATTERN = regexp.MustCompile(`^([^:]*):\s*(.*)\s*$`)
+
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
-	log.Printf("ServeHTTP: url=%s\n", r.URL)
+	defer r.Body.Close()
 
-	w.WriteHeader(http.StatusOK)
-	w.Header().Set("Content-Type", "text/html")
-	if !s.writeString(w, "<h1>FastCGI Response</h1>\n") {
-		return
+	if s.verbose {
+		log.Printf("request: %s\n", r.URL)
 	}
 
-	if !s.writeString(w, fmt.Sprintf("<h2>URL</h2><code>%s</code>\n", r.URL)) {
-		return
-	}
-
-	if !s.writeString(w, fmt.Sprintf("<h2>Query</h2><code>%v</code>\n", r.URL.Query())) {
-		return
-	}
-
-	if !s.writeString(w, "<h2>Headers:</h2>\n") {
-		return
-	}
-	if !s.writeString(w, "<ul>\n") {
-		return
-	}
-	for header, values := range r.Header {
-		for _, value := range values {
-			if !s.writeString(w, fmt.Sprintf("<li><code>%s=%s</code></li>\n", header, html.EscapeString(value))) {
-				return
-			}
-		}
-	}
-	if !s.writeString(w, "</ul>\n") {
-		return
+	fields := URL_PATTERN.FindStringSubmatch(r.URL.String())
+	var script string
+	var query string
+	if len(fields) > 2 {
+		script = fields[1]
+		query = fields[2]
 	}
 
 	env := fcgi.ProcessEnv(r)
-	if !s.writeString(w, "<h2>Environment:</h2>\n") {
-		return
-	}
-	if !s.writeString(w, "<ul>\n") {
-		return
-	}
+	env["REQUEST_URI"] = r.URL.String()
+	env["SCRIPT_NAME"] = script
+	env["QUERY_STRING"] = query
+	addr, port, _ := strings.Cut(r.RemoteAddr, ":")
+	env["REMOTE_ADDR"] = addr
+	env["REMOTE_PORT"] = port
+	env["REQUEST_METHOD"] = r.Method
+
+	scriptPath := filepath.Join(s.ScriptRoot, env["SCRIPT_FILENAME"])
+
+	cmd := exec.Command(scriptPath)
+	cmd.Env = os.Environ()
 	for key, value := range env {
-		if !s.writeString(w, fmt.Sprintf("<li><code>%s=%s</code></li>\n", key, html.EscapeString(value))) {
-			return
+		cmd.Env = append(cmd.Env, fmt.Sprintf("%s=%s", key, value))
+	}
+	w.WriteHeader(http.StatusOK)
+	w.Header().Set("Content-Type", "text/html")
+
+	var obuf bytes.Buffer
+	var ebuf bytes.Buffer
+
+	cmd.Stdin = r.Body
+	cmd.Stdout = &obuf
+	cmd.Stderr = &ebuf
+	err := cmd.Run()
+	if err != nil {
+		s.fail(w, http.StatusInternalServerError)
+		return
+	}
+
+	if ebuf.Len() > 0 {
+		log.Printf("script %s stderr: %s\n", scriptPath, ebuf.String())
+	}
+	scanner := bufio.NewScanner(&obuf)
+	var headerComplete bool
+	for scanner.Scan() {
+		line := scanner.Text()
+		switch {
+		case headerComplete:
+			if !s.writeString(w, line+"\n") {
+				return
+			}
+		case line == "":
+			headerComplete = true
+		default:
+			fields := HEADER_PATTERN.FindStringSubmatch(line)
+			if len(fields) == 3 {
+				w.Header().Set(fields[1], fields[2])
+			} else {
+				log.Printf("failed parsing output header: %s\n", line)
+			}
 		}
 	}
-	if !s.writeString(w, "</ul>\n") {
+	err = scanner.Err()
+	if err != nil {
+		s.fail(w, http.StatusInternalServerError)
 		return
 	}
 }
